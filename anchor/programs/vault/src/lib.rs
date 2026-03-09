@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program::{transfer, Transfer};
+use solana_sdk::account::Account;
 
 
 pub const ANCHOR_DISCRIMATOR_SIZE: usize = 8;
@@ -9,6 +10,23 @@ mod tests;
 declare_id!("B1TUGS5xdcHujsxBSq1MNDmiVsyzCKa2Y91nQDSouFrS");
 
 
+#[error_code]
+pub enum GameError {
+    #[msg("Invalid player")]
+    InvalidPlayer,
+
+    #[msg("Position already taken")]
+    PositionAlreadyTaken,
+
+    #[msg("Game already finished")]
+    GameAlreadyFinished,
+
+    #[msg("Not player's turn")]
+    NotPlayersTurn,
+
+      #[msg("Invalid position")]
+    InvalidPosition,
+}
 #[program]
 pub mod vault {
     use super::*;
@@ -17,12 +35,41 @@ pub mod vault {
          game_id: u64,
         ready_player_o:Pubkey,
     ) -> Result<()> {
-        
+
             let game_account = &mut ctx.accounts.game_account;
             game_account.ready_player_x = ctx.accounts.signer.key();
             game_account.ready_player_o = ready_player_o;
             game_account.board = [0; 9];
             game_account.game_state = GameState::Waiting;
+
+        Ok(())
+    }
+
+    pub fn next_move(ctx:Context<NextMove>, position:u8)->Result<()> {
+                let game_account = &mut ctx.accounts.game_account;
+                let player = ctx.accounts.player.key();
+
+
+                if player != game_account.ready_player_x && player != game_account.ready_player_o {
+             return Err(GameError::InvalidPlayer.into());
+                }
+        // validate position:
+                if position >= 9 {
+                    return Err(GameError::InvalidPosition.into());
+                }
+    
+    // position already taken
+                if game_account.board[position as usize] != 0 {
+                    return Err(GameError::PositionAlreadyTaken.into());
+                }
+
+                // validate the right player's turn
+                
+
+
+        // update board
+
+        // call check winner and update game state
 
         Ok(())
     }
@@ -51,6 +98,15 @@ pub struct InitGame<'info> {
      pub system_program: Program<'info, System>,
 }
 
+
+#[derive(Accounts)]
+pub struct NextMove<'info> {
+    #[account(mut)]
+    pub player: Signer<'info>,
+    
+    #[account(mut)]
+    pub game_account: Account<'info, GameAccount>,
+}
 #[account]
 #[derive(InitSpace)]
 pub struct GameAccount {
@@ -59,6 +115,8 @@ pub struct GameAccount {
     pub board: [u8; 9],
     pub game_state: GameState,
 }
+
+
   
 
 
@@ -71,3 +129,5 @@ pub enum GameState {
     OWon,
     Draw,
 }
+
+
