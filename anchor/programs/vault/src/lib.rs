@@ -26,6 +26,31 @@ pub enum GameError {
       #[msg("Invalid position")]
     InvalidPosition,
 }
+
+pub fn validate(board: &[u8; 9]) -> Option<GameState> {
+    let lines = [
+        [0, 1, 2], [3, 4, 5], [6, 7, 8], 
+        [0, 3, 6], [1, 4, 7], [2, 5, 8], 
+        [0, 4, 8], [2, 4, 6],            
+    ];
+
+    for line in lines {
+        let [a, b, c] = line;
+        if board[a] != 0 && board[a] == board[b] && board[a] == board[c] {
+            return Some(match board[a] {
+                1 => GameState::XWon,
+                2 => GameState::OWon,
+                _ => unreachable!(),
+            });
+        }
+    }
+
+    if board.iter().all(|&cell| cell != 0) {
+        return Some(GameState::Draw);
+    }
+
+    None
+}
 #[program]
 pub mod block_tac {
     use super::*;
@@ -93,7 +118,10 @@ pub mod block_tac {
         // call check winner 
         
         // update game state: 
-             match game_account.game_state {
+        if let Some(state) = validate(&game_account.board) {
+    game_account.game_state = state; 
+} else {
+        match game_account.game_state {
     GameState::XMove => {
         game_account.game_state = GameState::OMove;
     }
@@ -104,6 +132,8 @@ pub mod block_tac {
         
     }
 }
+}
+     
 
         Ok(())
     }
