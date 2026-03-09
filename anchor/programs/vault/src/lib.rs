@@ -1,6 +1,5 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program::{transfer, Transfer};
-use solana_sdk::account::Account;
 
 
 pub const ANCHOR_DISCRIMATOR_SIZE: usize = 8;
@@ -28,11 +27,11 @@ pub enum GameError {
     InvalidPosition,
 }
 #[program]
-pub mod vault {
+pub mod block_tac {
     use super::*;
 
     pub fn init_game(ctx:Context<InitGame>,
-         game_id: u64,
+         _game_id: u64,
         ready_player_o:Pubkey,
     ) -> Result<()> {
 
@@ -40,7 +39,7 @@ pub mod vault {
             game_account.ready_player_x = ctx.accounts.signer.key();
             game_account.ready_player_o = ready_player_o;
             game_account.board = [0; 9];
-            game_account.game_state = GameState::Waiting;
+            game_account.game_state = GameState::XMove;
 
         Ok(())
     }
@@ -49,7 +48,7 @@ pub mod vault {
                 let game_account = &mut ctx.accounts.game_account;
                 let player = ctx.accounts.player.key();
 
-
+// validate player
                 if player != game_account.ready_player_x && player != game_account.ready_player_o {
              return Err(GameError::InvalidPlayer.into());
                 }
@@ -64,12 +63,47 @@ pub mod vault {
                 }
 
                 // validate the right player's turn
-                
+                match game_account.game_state {
+                    GameState::XMove => {
+                        if player != game_account.ready_player_x {
+                            return Err(GameError::NotPlayersTurn.into());
+                        }
+                    }
+                    GameState::OMove => {
+                        if player != game_account.ready_player_o {
+                            return Err(GameError::NotPlayersTurn.into());
+                        }
+                    }
+                    _ => {}
+                }
 
+        
+        match game_account.game_state {
+    GameState::XMove => {
+        game_account.board[position as usize] = 1;
+    }
+    GameState::OMove => {
+        game_account.board[position as usize] = 2;
+    }
+    _ => {
+        
+    }
+}
 
-        // update board
-
-        // call check winner and update game state
+        // call check winner 
+        
+        // update game state: 
+             match game_account.game_state {
+    GameState::XMove => {
+        game_account.game_state = GameState::OMove;
+    }
+    GameState::OMove => {
+        game_account.game_state = GameState::XMove;
+    }
+    _ => {
+        
+    }
+}
 
         Ok(())
     }
@@ -127,6 +161,8 @@ pub enum GameState {
     InProgress,
     XWon,
     OWon,
+    XMove,
+    OMove,
     Draw,
 }
 
