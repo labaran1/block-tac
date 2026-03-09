@@ -1,75 +1,73 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program::{transfer, Transfer};
 
+
+pub const ANCHOR_DISCRIMATOR_SIZE: usize = 8;
 #[cfg(test)]
 mod tests;
 
 declare_id!("B1TUGS5xdcHujsxBSq1MNDmiVsyzCKa2Y91nQDSouFrS");
 
+
 #[program]
 pub mod vault {
     use super::*;
 
-    pub fn deposit(ctx: Context<VaultAction>, amount: u64) -> Result<()> {
-        require!(ctx.accounts.vault.lamports() == 0, VaultError::VaultAlreadyExists);
-
-        let rent = Rent::get()?.minimum_balance(0);
-        require!(amount > rent, VaultError::InvalidAmount);
-
-        transfer(
-            CpiContext::new(
-                ctx.accounts.system_program.to_account_info(),
-                Transfer {
-                    from: ctx.accounts.signer.to_account_info(),
-                    to: ctx.accounts.vault.to_account_info(),
-                },
-            ),
-            amount,
-        )?;
+    pub fn init_game(ctx:Context<InitGame>,
+         game_id: u64,
+        ready_player_o:Pubkey,
+    ) -> Result<()> {
+        
+            let game_account = &mut ctx.accounts.game_account;
+            game_account.ready_player_x = ctx.accounts.signer.key();
+            game_account.ready_player_o = ready_player_o;
+            game_account.board = [0; 9];
+            game_account.game_state = GameState::Waiting;
 
         Ok(())
     }
 
-    pub fn withdraw(ctx: Context<VaultAction>) -> Result<()> {
-        require!(ctx.accounts.vault.lamports() > 0, VaultError::InvalidAmount);
 
-        let bump = ctx.bumps.vault;
-        let signer_key = ctx.accounts.signer.key();
-        let signer_seeds: &[&[&[u8]]] = &[&[b"vault", signer_key.as_ref(), &[bump]]];
-
-        transfer(
-            CpiContext::new_with_signer(
-                ctx.accounts.system_program.to_account_info(),
-                Transfer {
-                    from: ctx.accounts.vault.to_account_info(),
-                    to: ctx.accounts.signer.to_account_info(),
-                },
-                signer_seeds,
-            ),
-            ctx.accounts.vault.lamports(),
-        )?;
-
-        Ok(())
     }
-}
+
+
 
 #[derive(Accounts)]
-pub struct VaultAction<'info> {
+#[instruction(game_id: u64)]
+pub struct InitGame<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
+
     #[account(
-        mut,
-        seeds = [b"vault", signer.key().as_ref()],
-        bump,
+        init,
+        payer = signer,
+        space = ANCHOR_DISCRIMATOR_SIZE + GameAccount::INIT_SPACE,
+        seeds = [b"game", game_id.to_le_bytes().as_ref()],
+        bump
     )]
-    pub vault: SystemAccount<'info>,
-    pub system_program: Program<'info, System>,
+
+
+    pub game_account: Account<'info, GameAccount>,
+     pub system_program: Program<'info, System>,
 }
 
-#[error_code]
-pub enum VaultError {
-    #[msg("Vault already exists")]
-    VaultAlreadyExists,
-    #[msg("Invalid amount")]
-    InvalidAmount,
+#[account]
+#[derive(InitSpace)]
+pub struct GameAccount {
+    pub ready_player_x: Pubkey,
+    pub ready_player_o: Pubkey,
+    pub board: [u8; 9],
+    pub game_state: GameState,
+}
+  
+
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
+
+pub enum GameState {
+    Waiting,
+    InProgress,
+    XWon,
+    OWon,
+    Draw,
 }
